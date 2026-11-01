@@ -41,8 +41,11 @@ jobs:
             echo "===== Go version ====="
             go version
 
-            echo "===== Source revision ====="
+            echo "===== Git directory safety ====="
             cd cloudflared
+            git config --global --add safe.directory "$(pwd)"
+
+            echo "===== Source revision ====="
             git log -1 --oneline
 
             echo "===== Build cloudflared ====="
