@@ -1,0 +1,47 @@
+
+name: Build cloudflared for FreeBSD
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Cloudflare source with FreeBSD patch
+        uses: actions/checkout@v4
+        with:
+          repository: cloudflare/cloudflared
+          ref: master
+          path: cloudflared
+
+      - name: Apply FreeBSD support patch
+        run: |
+          git -C cloudflared fetch origin pull/1526/head:freebsd-pr-1526
+          git -C cloudflared checkout freebsd-pr-1526
+
+      - name: Build on FreeBSD 14.3 amd64
+        uses: vmactions/freebsd-vm@v1
+        with:
+          release: "14.3"
+          arch: x86-64
+          usesh: true
+          prepare: |
+            pkg install -y go git gmake
+          run: |
+            cd cloudflared
+            gmake TARGET_OS=freebsd TARGET_ARCH=amd64 cloudflared
+            mkdir -p output
+            cp cloudflared ../cloudflared-freebsd-amd64
+            file ../cloudflared-freebsd-amd64
+            sha256 ../cloudflared-freebsd-amd64
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cloudflared-freebsd-amd64
+          path: cloudflared-freebsd-amd64
+          if-no-files-found: error
