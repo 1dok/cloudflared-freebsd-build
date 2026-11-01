@@ -1,5 +1,5 @@
 
-name: Build cloudflared for FreeBSD
+name: Build cloudflared 2026.10.7 for FreeBSD
 
 on:
   workflow_dispatch:
@@ -9,16 +9,16 @@ permissions:
 
 jobs:
   build:
-    name: Build on FreeBSD 14.3 amd64
+    name: Build cloudflared 2026.10.7 on FreeBSD 14.3 amd64
     runs-on: ubuntu-latest
     timeout-minutes: 60
 
     steps:
-      - name: Checkout Cloudflare source with FreeBSD support
+      - name: Checkout official cloudflared 2026.10.7 source
         uses: actions/checkout@v4
         with:
           repository: cloudflare/cloudflared
-          ref: refs/pull/1526/head
+          ref: 2026.10.7
           path: cloudflared
           fetch-depth: 0
 
@@ -34,6 +34,8 @@ jobs:
           run: |
             set -eux
 
+            cd cloudflared
+
             echo "===== FreeBSD system ====="
             freebsd-version
             uname -m
@@ -41,15 +43,44 @@ jobs:
             echo "===== Go version ====="
             go version
 
-            echo "===== Git directory safety ====="
-            cd cloudflared
-            git config --global --add safe.directory "$(pwd)"
+            echo "===== Verify official source version ====="
+            git describe --tags --exact-match
+            test "$(git describe --tags --exact-match)" = "2026.10.7"
 
-            echo "===== Source revision ====="
-            git log -1 --oneline
+            echo "===== Fetch FreeBSD compatibility PR ====="
+            git fetch origin refs/pull/1526/head
+
+            PR_HEAD="$(git rev-parse FETCH_HEAD)"
+            PR_BASE="$(git rev-parse "${PR_HEAD}^2")"
+
+            echo "PR HEAD: ${PR_HEAD}"
+            echo "PR upstream parent: ${PR_BASE}"
+
+            echo "===== Check PR compatibility patch files ====="
+            ACTUAL_FILES="$(git diff --name-only "${PR_BASE}" "${PR_HEAD}" | sort)"
+
+            EXPECTED_FILES="$(printf '%s\n' \
+              'Makefile' \
+              'diagnostic/network/collector_unix.go' \
+              'diagnostic/network/collector_unix_test.go' \
+              'diagnostic/system_collector_freebsd.go' | sort)"
+
+            printf '%s\n' "${ACTUAL_FILES}"
+            test "${ACTUAL_FILES}" = "${EXPECTED_FILES}"
+
+            echo "===== Generate FreeBSD compatibility patch ====="
+            git diff --binary "${PR_BASE}" "${PR_HEAD}" > /tmp/freebsd.patch
+            test -s /tmp/freebsd.patch
+
+            echo "===== Check patch applicability ====="
+            git apply --check /tmp/freebsd.patch
+
+            echo "===== Apply FreeBSD compatibility patch ====="
+            git apply /tmp/freebsd.patch
 
             echo "===== Add FreeBSD token file implementation ====="
             test ! -e cmd/cloudflared/freebsd_token_file.go
+
             cat > cmd/cloudflared/freebsd_token_file.go <<'EOF'
             //go:build freebsd
 
@@ -58,8 +89,8 @@ jobs:
             var createTokenFile = createTokenFileUnix
             EOF
 
-            echo "===== Verify FreeBSD compatibility patch ====="
-            cat cmd/cloudflared/freebsd_token_file.go
+            echo "===== Verify source version after patch ====="
+            git describe --tags --exact-match
 
             echo "===== Build cloudflared ====="
             gmake TARGET_OS=freebsd TARGET_ARCH=amd64 cloudflared
@@ -69,14 +100,19 @@ jobs:
             file cloudflared
             sha256 cloudflared
 
-            echo "===== Copy build artifact ====="
-            cp cloudflared ../cloudflared-freebsd-amd64
-            test -s ../cloudflared-freebsd-amd64
+            echo "===== Verify binary version ====="
+            ./cloudflared --version
 
-      - name: Upload FreeBSD binary
+            ./cloudflared --version | grep -q "2026.10.7"
+
+            echo "===== Copy build artifact ====="
+            cp cloudflared ../cloudflared-freebsd-amd64-2026.10.7
+            test -s ../cloudflared-freebsd-amd64-2026.10.7
+
+      - name: Upload FreeBSD 2026.10.7 binary
         uses: actions/upload-artifact@v4
         with:
-          name: cloudflared-freebsd-amd64
-          path: cloudflared-freebsd-amd64
+          name: cloudflared-freebsd-amd64-2026.10.7
+          path: cloudflared-freebsd-amd64-2026.10.7
           if-no-files-found: error
           retention-days: 14
