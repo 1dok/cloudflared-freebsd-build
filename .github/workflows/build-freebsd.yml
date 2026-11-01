@@ -48,6 +48,19 @@ jobs:
             echo "===== Source revision ====="
             git log -1 --oneline
 
+            echo "===== Add FreeBSD token file implementation ====="
+            test ! -e cmd/cloudflared/freebsd_token_file.go
+            cat > cmd/cloudflared/freebsd_token_file.go <<'EOF'
+            //go:build freebsd
+
+            package main
+
+            var createTokenFile = createTokenFileUnix
+            EOF
+
+            echo "===== Verify FreeBSD compatibility patch ====="
+            cat cmd/cloudflared/freebsd_token_file.go
+
             echo "===== Build cloudflared ====="
             gmake TARGET_OS=freebsd TARGET_ARCH=amd64 cloudflared
 
