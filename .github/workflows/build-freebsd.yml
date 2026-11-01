@@ -9,41 +9,58 @@ permissions:
 
 jobs:
   build:
+    name: Build on FreeBSD 14.3 amd64
     runs-on: ubuntu-latest
+    timeout-minutes: 60
 
     steps:
-      - name: Checkout Cloudflare source
+      - name: Checkout Cloudflare source with FreeBSD support
         uses: actions/checkout@v4
         with:
           repository: cloudflare/cloudflared
-          ref: master
+          ref: refs/pull/1526/head
           path: cloudflared
+          fetch-depth: 0
 
-      - name: Checkout FreeBSD support patch
-        run: |
-          git -C cloudflared fetch origin pull/1526/head:freebsd-pr-1526
-          git -C cloudflared checkout freebsd-pr-1526
-
-      - name: Build on FreeBSD 14.3
+      - name: Build cloudflared on FreeBSD 14.3
         uses: vmactions/freebsd-vm@v1
         with:
           release: "14.3"
+          usesh: true
+
           prepare: |
             pkg install -y go git gmake
+
           run: |
+            set -eux
+
+            echo "===== FreeBSD system ====="
             freebsd-version
             uname -m
+
+            echo "===== Go version ====="
+            go version
+
+            echo "===== Source revision ====="
             cd cloudflared
-            git describe --tags --always
+            git log -1 --oneline
+
+            echo "===== Build cloudflared ====="
             gmake TARGET_OS=freebsd TARGET_ARCH=amd64 cloudflared
-            test -f cloudflared
+
+            echo "===== Verify binary ====="
+            test -s cloudflared
             file cloudflared
             sha256 cloudflared
-            cp cloudflared ../cloudflared-freebsd-amd64
 
-      - name: Upload build artifact
+            echo "===== Copy build artifact ====="
+            cp cloudflared ../cloudflared-freebsd-amd64
+            test -s ../cloudflared-freebsd-amd64
+
+      - name: Upload FreeBSD binary
         uses: actions/upload-artifact@v4
         with:
           name: cloudflared-freebsd-amd64
           path: cloudflared-freebsd-amd64
           if-no-files-found: error
+          retention-days: 14
