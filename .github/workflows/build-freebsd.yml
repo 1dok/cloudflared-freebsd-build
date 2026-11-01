@@ -18,7 +18,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: cloudflare/cloudflared
-          ref: 2026.10.7
+          ref: "2026.10.7"
           path: cloudflared
           fetch-depth: 0
 
@@ -35,6 +35,9 @@ jobs:
             set -eux
 
             cd cloudflared
+
+            echo "===== Git directory safety ====="
+            git config --global --add safe.directory "$(pwd)"
 
             echo "===== FreeBSD system ====="
             freebsd-version
